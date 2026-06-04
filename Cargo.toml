@@ -1,0 +1,18 @@
+[package]
+name    = "oil_health_core"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "oil_health_core"
+path = "src/main.rs"
+
+[profile.release]
+opt-level     = 3
+lto           = true       # link-time optimisation - smaller, faster binary
+codegen-units = 1          # single codegen unit = better inlining
+panic         = "abort"    # no unwinding overhead on RPi
+strip         = true       # strip debug symbols for smaller binary
+
+[profile.release.build-override]
+opt-level = 3
