@@ -40,71 +40,11 @@ Engine oil degrades over time through oxidation, base depletion, viscosity break
 
 ---
 
-## System Architecture
 
-```mermaid
-graph TD
-    subgraph SENSORS["Sensor Layer"]
-        SER["Serial Sensor<br/>engine_hours, visc, DC, soot<br/>[optionally TBN, TAN]"]
-        MQTT["MQTT Sensor Node<br/>JSON payload"]
-        SIM["Simulation Stream<br/>synthetic degradation"]
-    end
-
-    subgraph LIVE["Live Pipeline  ─  runs every 1-2 seconds"]
-        TICK["_tick()  hot path"]
-        INTERP["InterpolationModel<br/>CubicSpline for TBN & TAN<br/>singleton · loaded once at startup"]
-        INFER["KMeans Inference<br/>Manhattan distance<br/>3 centroids × 5 features<br/>~0.01 ms · pure NumPy"]
-        OHI["compute_ohi()<br/>PCA-weighted score<br/>0 – 100"]
-        BUF["SensorRingBuffer<br/>last 500 readings<br/>thread-safe deque"]
-        LOG["DataLogger<br/>readings.csv"]
-        OUT["OilHealthResult<br/>state · OHI · distance · latency"]
-    end
-
-    subgraph OFFLINE["Offline Trainer  ─  runs only when engine is idle"]
-        ELBOW["Elbow Method<br/>k = 2 … 6<br/>picks optimal K"]
-        KMEANS["KMeans fit<br/>full 5-dim feature space<br/>k-means++ init"]
-        LABEL["Cluster Labelling<br/>post-hoc from paper thresholds<br/>Healthy / Warning / Degraded"]
-        PCA["PCA  PC1 loadings<br/>→ OHI feature weights<br/>data-driven, not hardcoded"]
-        REFIT["Interpolation Refit<br/>reload all lab_samples.csv<br/>rebuild splines"]
-        EXPORT["Export centroids.bin<br/>atomic write via rename"]
-    end
-
-    subgraph LAB["Lab Path  ─  out-of-band, infrequent"]
-        LABSAMPLE["LabSample<br/>TBN + TAN at engine_hours"]
-        LABLOG["LabSampleLogger<br/>lab_samples.csv"]
-        ADDKNOT["InterpolationModel<br/>add_lab_sample()<br/>refit splines inline · <1 ms"]
-    end
-
-    SER -->|SensorReading| TICK
-    MQTT -->|SensorReading| TICK
-    SIM -->|SensorReading| TICK
-
-    TICK -->|engine_hours| INTERP
-    INTERP -->|TBN, TAN estimate| TICK
-    TICK --> INFER
-    TICK --> BUF
-    TICK --> LOG
-    INFER -->|cluster · state · distance| OHI
-    OHI --> OUT
-
-    BUF -->|to_numpy()| ELBOW
-    ELBOW --> KMEANS
-    KMEANS --> LABEL
-    LABEL --> EXPORT
-    KMEANS --> PCA
-    PCA -->|weights| OHI
-    KMEANS --> REFIT
-    REFIT --> ADDKNOT
-
-    LABSAMPLE --> LABLOG
-    LABSAMPLE --> ADDKNOT
-    ADDKNOT -->|updated spline| INTERP
-    LABLOG -->|load_all() on startup| ADDKNOT
-```
 
 ---
 
-## Hot Path — Live Inference
+## Hot Path — Live Inference and system architecture for real-time sensor processing
 
 Runs every tick (default 1 second). **No training, no disk I/O, no blocking calls.**
 
