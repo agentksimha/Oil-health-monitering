@@ -151,28 +151,7 @@ stream = make_simulation_stream(seed=42, hours_per_step=0.5)
 
 TBN and TAN cannot be measured continuously — labs analyse oil samples every 50–250 engine hours. The `InterpolationModel` singleton bridges these gaps.
 
-```mermaid
-graph LR
-    subgraph Sparse["Sparse lab samples (every 50-250h)"]
-        L0["t=0\nTBN=10.74"]
-        L1["t=50\nTBN=9.80"]
-        L2["t=100\nTBN=8.95"]
-        L3["t=200\nTBN=7.81"]
-    end
 
-    subgraph Spline["CubicSpline (clamped BC)"]
-        SP["fitted once per new knot\n<1 ms · runs inline"]
-    end
-
-    subgraph Dense["Dense estimates (every 1s)"]
-        D1["t=12.5 → 10.68"]
-        D2["t=37.0 → 10.20"]
-        D3["t=156.0 → 8.05"]
-    end
-
-    Sparse -->|add_lab_sample()| Spline
-    Spline -->|estimate(engine_hours)| Dense
-```
 
 **Lifecycle:**
 1. **Startup** — loads knot arrays from `interpolation.npz` (if exists), else bootstraps from paper data
